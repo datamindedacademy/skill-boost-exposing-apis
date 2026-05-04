@@ -1,0 +1,121 @@
+{
+  "realm": "checkup",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "user",
+        "description": "Regular user role"
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "agent-all",
+      "enabled": true,
+      "email": "agent-all@example.com",
+      "firstName": "Agent",
+      "lastName": "Full Access",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["user"],
+      "attributes": {
+        "products": ["*"]
+      }
+    },
+    {
+      "username": "agent-stellar",
+      "enabled": true,
+      "email": "agent-stellar@example.com",
+      "firstName": "Agent",
+      "lastName": "Stellar Sales",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["user"],
+      "attributes": {
+        "products": ["stellar_sales"]
+      }
+    },
+    {
+      "username": "agent-multi",
+      "enabled": true,
+      "email": "agent-multi@example.com",
+      "firstName": "Agent",
+      "lastName": "Multi Product",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["user"],
+      "attributes": {
+        "products": ["stellar_sales", "cosmic_inventory"]
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "checkup-api",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "3600"
+      },
+      "protocolMappers": [
+        {
+          "name": "products",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "products",
+            "claim.name": "products",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "true",
+            "aggregate.attrs": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "products",
+      "description": "Product access scope",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    }
+  ],
+  "defaultDefaultClientScopes": [
+    "products"
+  ]
+}
