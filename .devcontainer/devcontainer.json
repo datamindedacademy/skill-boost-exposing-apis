@@ -2,7 +2,7 @@
   "name": "Skill Boost: Building & Exposing Data APIs",
   "image": "mcr.microsoft.com/devcontainers/python:3.12",
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:2": { "moby": false }
   },
   "postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && $HOME/.local/bin/uv sync --all-extras && docker compose up -d",
   "forwardPorts": [8000, 8080, 5432],
