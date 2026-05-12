@@ -1,6 +1,6 @@
 # Exercise 1: REST API design
 
-Redesign the existing API design using RESTful design principles.
+Redesign the existing API using RESTful design principles.
 
 ## Setup
 
@@ -32,30 +32,72 @@ Notes:
 
 This is a very simple inside-out API design. The URLs and payloads
 mirror the data model. It's the most intuitive thing to ship, requires no transformation,
-but it can fail to properly abstract the inner workings of the backend. 
-The data model (often optimized for storage) and the API contract serve different audiences and often shouldn't match.
-RESTful design principles are one common toolkit for shaping that consumer-facing contract — that's what you'll apply in Part B.
+but it can fail to properly abstract the inner workings of the backend.
+The data model (often optimized for storage) and the API contract serve different audiences and often shouldn't match 1-on-1. RESTful design principles are one common toolkit for shaping that consumer-facing contract.
 
-## Part B: Build the `/v2/*` API
+## RESTful design principles
 
-Open `src/checkup_api/routers/v2.py`. The endpoints are stubbed —
-each one raises 501 with a hint about what to build. Implement them using
-**raw SQL** via `db.execute(text(sql), params)`.
+The notes below are a condensed summary of REST design principles. For the full references, see restfulapi.net's pages on [architectural constraints](https://restfulapi.net/rest-architectural-constraints/) and [resource naming](https://restfulapi.net/resource-naming/).
 
-The endpoints to implement:
+### Architectural constraints
 
-| Method & Path | What it returns |
-|---|---|
-| `GET /v2/products` | List, with entity name + `{healthy, warn, critical}` rollup, filterable by `?entity=`, `?status=`, paginated |
-| `GET /v2/products/{slug}` | Detail (same as list item + `created_at`) |
-| `GET /v2/products/{slug}/metrics` | Latest measurement per metric, with **server-derived** `status` |
-| `GET /v2/products/{slug}/metrics/{name}/history` | Time series (most recent first) |
-| `GET /v2/metrics` | Catalog of metric definitions |
-| `GET /v2/metrics/{name}` | One catalog entry |
+- **Uniform interface**: one logical URI per resource, accessed and modified through a consistent approach (HTTP verbs, naming conventions, shared data format).
+- **Client-server**: client and server evolve independently as long as the interface stays stable.
+- **Stateless**: the server keeps no client context between requests. Every request carries everything needed to service it.
+- **Cacheable**: responses declare whether they can be cached, cutting round trips and easing server load.
+- **Layered system**: a client can't tell whether it's talking to the origin server or an intermediary (gateway, cache, auth proxy).
 
-The `status` field is the headline win: clients no longer need to know
-your threshold scheme. Compute it from `metrics.threshold_warn`,
-`metrics.threshold_critical`, and `metrics.higher_is_better`.
+### REST Resources and URIs
+
+A **resource** is the key abstraction in REST. Anything that can be named (a document, an image, an object, a service, a collection of other resources) can be a resource. The API exposes resources, not actions on them.
+
+Resources come in two shapes:
+
+- **Singleton**: one specific thing, e.g. `/customers/{id}`.
+- **Collection**: a set of things, e.g. `/customers`. Collections can contain sub-collections, e.g. `/customers/{id}/accounts`.
+
+Each resource is addressed by a **URI** (Uniform Resource Identifier). Well-chosen URIs make the resource model obvious to consumers and are part of how REST honors the uniform-interface constraint.
+
+In practice, the resources you expose don't have to (and often shouldn't) match your DB tables 1-to-1: the storage model is optimized for normalization and joins, the API model for the consumer, so the API layer ends up doing the mapping.
+
+Responses can also include [**HATEOAS**](https://restfulapi.net/hateoas) links pointing to related resources, so consumers navigate the API from the response itself instead of hard-coding URI structure.
+
+### Resource naming and URI design
+
+- **Use nouns, not verbs**. URIs name resources; HTTP methods carry the actions. Each resource fits one of three archetypes, and you should stick with one per resource:
+  - *Document*: a singular concept, like one record. Singular name, e.g. `/products/{slug}`.
+  - *Collection*: a server-managed set where the server assigns URIs to new items. Plural name, e.g. `/products`.
+  - *Store*: a client-managed set where the client picks the URIs. Plural name, e.g. `/users/{id}/playlists`.
+- **Stay consistent**. Use `/` for hierarchy, drop any trailing `/`, separate words with hyphens, keep everything lowercase.
+- **No file extensions**. Use the `Content-Type` header for media type instead of `.json` or `.xml` suffixes.
+- **No CRUD function names in URIs**. `GET /products`, not `/getProducts`. `DELETE /products/{id}`, not `/products/{id}/delete`.
+- **Filter, sort, and paginate collections via query parameters**, not separate endpoints. E.g. `?entity=marketing&status=critical&sort=name&limit=25&offset=0`. Pick sensible defaults and a hard max for pagination.
+
+## Part B: Design and build the `/v2/*` API
+
+Open `src/checkup_api/routers/v2.py`. You're going to design the consumer-facing API
+yourself, using the principles above as your toolkit.
+
+### Consumer scenarios your API has to support
+
+1. Browse products, optionally filtered by entity or by health status,
+   with a quick health rollup so the UI doesn't need to fan out.
+2. Drill into a specific product to see its metadata and current health.
+3. See the latest measurement per metric for a product, with each
+   measurement labeled `healthy`/`warn`/`critical` — derived **server-side**
+   from `metrics.threshold_warn`, `metrics.threshold_critical`, and
+   `metrics.higher_is_better`. (Clients shouldn't need to know your
+   threshold scheme.)
+4. View the recent history of a single metric on a single product.
+5. Browse the metric catalog (definitions, thresholds).
+
+Translate those into URLs, query params, and response shapes. The
+Pydantic models in `src/checkup_api/schemas.py` describe the response
+shapes you're aiming for — read them.
+
+### Implementation
+
+Use **raw SQL** via `db.execute(text(sql), params)`. See `routers/v1.py` for reference.
 
 ### Test
 
@@ -63,68 +105,26 @@ your threshold scheme. Compute it from `metrics.threshold_warn`,
 make test-1
 ```
 
-If you get stuck:
+The tests pin down the URL shape, query params, and response details.
+Treat them as the contract: if your first design doesn't match, the
+failures tell you what to adjust. Iterate.
+
+If you get really stuck:
 
 ```sh
 make solve-1
 ```
 
-## RESTful design principles
+<details>
+<summary>Reference design (peek only if stuck)</summary>
 
-The headline principle this whole arc drills:
+| Method & Path | What it returns |
+|---|---|
+| `GET /v2/products` | List with entity name + `{healthy, warn, critical}` rollup, filterable by `?entity=`, `?status=`, paginated |
+| `GET /v2/products/{slug}` | Detail (list item + `created_at`) |
+| `GET /v2/products/{slug}/metrics` | Latest measurement per metric, each with derived `status` |
+| `GET /v2/products/{slug}/metrics/{name}/history` | Time series, most recent first |
+| `GET /v2/metrics` | Catalog of metric definitions |
+| `GET /v2/metrics/{name}` | One catalog entry |
 
-> **Don't mirror the database.** The API is the contract; the database is
-> an implementation detail. Consumers shouldn't see your `tag_product`
-> column or your numeric `entity_id`.
-
-The principles below are the toolkit you use to honor that headline.
-
-### URI design
-
-- **Nouns, not verbs.** `/products`, not `/getProducts`. HTTP methods
-  carry the action.
-- **Plural collections; item under the collection.** `/products` and
-  `/products/{slug}`.
-- **Stable, meaningful identifiers.** Slugs (`stellar_sales`) are
-  searchable, memorable, and don't leak DB row order. Opaque ids
-  (`/products/1`) leak nothing useful.
-- **Cap nesting at ~2 levels.** `/products/{slug}/metrics/{name}/history`
-  is at the limit; deeper paths get brittle.
-
-### Responses
-
-- **Derived fields belong on the server.** A `status` of "critical" is
-  more useful than the raw value + thresholds the client has to combine.
-- **Embed for ergonomics; link for size.** Small, common rollups (health
-  counts) belong in list responses to avoid N+1 calls. Big payloads
-  (history, full measurements) deserve their own endpoint.
-- **Status codes carry meaning.** 200/201/204 for success, 400/404/422
-  for client errors, 401/403 for auth, 5xx for server. Don't 200-with-
-  error-in-body.
-
-### Lists
-
-- **Filter** with query params: `?entity=marketing`, `?status=critical`.
-- **Sort** with `?sort=name|health`. Default sort should be the most
-  common useful ordering, and you should *document it*.
-- **Paginate** with `?limit=&offset=`. Set sensible defaults and a hard max.
-
-### Versioning
-
-- The story you walk through (`v1` → `v2` URL prefixes) is one valid
-  versioning style. Header- and media-type-versioning are alternatives;
-  each has tradeoffs around caching and HATEOAS.
-- More important than the *style* is the *commitment*: never break a
-  version that's in active use. Add new versions instead.
-
-### HATEOAS — mentioned, not implemented
-
-Hypermedia as the Engine of Application State: each response carries
-links to the operations available on the returned resource(s). E.g. a
-`Product` response includes a `links` object with the URI of its
-`/metrics` and `/metrics/{name}/history` endpoints, so a consumer can
-navigate the API without prior knowledge of the URI structure.
-
-Why it matters for agents: a well-HATEOAS'd response lets an agent
-discover what to do next without re-reading the spec. We don't implement
-it here (skill scope), but it's worth knowing about.
+</details>

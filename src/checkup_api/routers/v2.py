@@ -1,5 +1,5 @@
 """
-V2 router, outside-in, consumer-facing .
+V2 router, consumer-facing.
 """
 
 from datetime import datetime
